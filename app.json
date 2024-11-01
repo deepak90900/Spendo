@@ -18,10 +18,23 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.rahul101232.spendo"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "scheme": "spendo",
+    "extra": {
+      "eas": {
+        "projectId": "3234e361-dbd3-456f-98f1-ccc59c48b7b5"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/3234e361-dbd3-456f-98f1-ccc59c48b7b5"
     }
   }
 }
