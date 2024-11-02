@@ -4,7 +4,8 @@ import { Text, Card, Button, Menu, IconButton } from "react-native-paper";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS, SIZES } from "../styles/theme";
 import { db } from "../firebaseConfig";
-import { collection, query, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const ExpenseHistoryScreen = () => {
   const [expenses, setExpenses] = useState([]);
@@ -15,22 +16,29 @@ const ExpenseHistoryScreen = () => {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
-  useEffect(() => {
-    const fetchExpenses = async () => {
-      const expensesRef = collection(db, "expenses");
-      const q = query(expensesRef);
+  // Get the current user
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
 
-      onSnapshot(q, (querySnapshot) => {
-        let expensesArray = [];
-        querySnapshot.forEach((doc) => {
-          expensesArray.push({ id: doc.id, ...doc.data() });
+  useEffect(() => {
+    if (currentUser) {
+      const fetchExpenses = async () => {
+        const expensesRef = collection(db, "expenses");
+        // Filter by userId to get only the current user's expenses
+        const q = query(expensesRef, where("userId", "==", currentUser.uid));
+
+        onSnapshot(q, (querySnapshot) => {
+          let expensesArray = [];
+          querySnapshot.forEach((doc) => {
+            expensesArray.push({ id: doc.id, ...doc.data() });
+          });
+          setExpenses(expensesArray);
+          setFilteredExpenses(expensesArray);
         });
-        setExpenses(expensesArray);
-        setFilteredExpenses(expensesArray);
-      });
-    };
-    fetchExpenses();
-  }, []);
+      };
+      fetchExpenses();
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     applyFilters();

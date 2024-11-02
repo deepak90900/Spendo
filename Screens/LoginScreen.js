@@ -1,11 +1,11 @@
-// screens/LoginScreen.js
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { auth } from "../firebaseConfig";
@@ -16,29 +16,39 @@ import { COLORS, SIZES } from "../styles/theme";
 const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId:
-      "1057274457534-raga5vp0ekgkoemomltfu4b9f0vgi3gp.apps.googleusercontent.com",
-    webClientId:
-      "1057274457534-gbt35b7g5p7u2jbckgu8icae15b580f2.apps.googleusercontent.com",
+    androidClientId: "YOUR_ANDROID_CLIENT_ID",
+    webClientId: "YOUR_WEB_CLIENT_ID",
   });
 
   const handleLogin = () => {
+    if (!email || !password) {
+      setError("Please enter both email and password.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
     signInWithEmailAndPassword(auth, email, password)
       .then((userCredential) => {
-        // console.log("User logged in:", userCredential.user);
-        navigation.replace("MainTabs");
+        navigation.replace("Home"); // This replaces LoginScreen in the stack
       })
       .catch((error) => {
-        console.error("Login error:", error.message);
-      });
+        setError("Invalid email or password. Please try again.");
+      })
+      .finally(() => setLoading(false));
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Welcome to Spendo</Text>
       <Text style={styles.subtitle}>Log in to your account</Text>
+
+      {error && <Text style={styles.errorText}>{error}</Text>}
 
       <View style={styles.inputContainer}>
         <Ionicons name="mail-outline" size={20} color={COLORS.iconColor} />
@@ -49,6 +59,7 @@ const LoginScreen = ({ navigation }) => {
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
+          autoCapitalize="none"
         />
       </View>
 
@@ -68,8 +79,16 @@ const LoginScreen = ({ navigation }) => {
         />
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Log In</Text>
+      <TouchableOpacity
+        style={[styles.button, loading && styles.buttonDisabled]}
+        onPress={handleLogin}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator size="small" color="#FFF" />
+        ) : (
+          <Text style={styles.buttonText}>Log In</Text>
+        )}
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -82,7 +101,7 @@ const LoginScreen = ({ navigation }) => {
       <TouchableOpacity
         style={[styles.button, styles.googleButton]}
         onPress={() => promptAsync()}
-        disabled={!request}
+        disabled={!request || loading}
       >
         <Ionicons name="logo-google" size={20} color="#fff" />
         <Text style={styles.buttonText}>Sign in with Google</Text>
@@ -111,6 +130,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 20,
   },
+  errorText: {
+    color: "red",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 10,
+  },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -121,11 +146,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SIZES.padding,
     marginBottom: 12,
     backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
   },
   input: {
     flex: 1,
@@ -140,17 +160,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 3,
   },
   buttonText: {
     color: "#ffffff",
     fontSize: 16,
     fontWeight: "bold",
-    marginLeft: 8,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   link: {
     marginTop: 12,

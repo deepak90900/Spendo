@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -7,12 +7,19 @@ import {
   Modal,
   ActivityIndicator,
 } from "react-native";
-import { TextInput, Button, Text, Provider } from "react-native-paper";
+import {
+  TextInput,
+  Button,
+  Text,
+  Provider,
+  Snackbar,
+} from "react-native-paper";
 import { COLORS, SIZES } from "../styles/theme";
 import { db } from "../firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { getAuth } from "firebase/auth";
 
 const AddExpenseScreen = ({ navigation }) => {
   const [amount, setAmount] = useState("");
@@ -22,6 +29,17 @@ const AddExpenseScreen = ({ navigation }) => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      // Clear form state on unmount
+      setAmount("");
+      setCategory("");
+      setDescription("");
+      setDate(new Date());
+    };
+  }, []);
 
   const handleAddExpense = async () => {
     const selectedDate = new Date(date);
@@ -42,14 +60,24 @@ const AddExpenseScreen = ({ navigation }) => {
 
     setLoading(true); // Start loading
     try {
+      const auth = getAuth();
+      const userId = auth.currentUser ? auth.currentUser.uid : null;
+
+      if (!userId) {
+        alert("User not authenticated.");
+        setLoading(false);
+        return;
+      }
+
       await addDoc(collection(db, "expenses"), {
+        userId, // Add the userId field
         amount: parseFloat(amount.replace(/,/g, "")),
         category,
         date: date.toLocaleDateString(),
         description,
       });
-      // console.log("Expense added successfully!");
-      alert("Expense added successfully!");
+
+      setSnackbarVisible(true); // Show success message
       // Reset fields after successful submission
       setAmount("");
       setCategory("");
@@ -71,11 +99,19 @@ const AddExpenseScreen = ({ navigation }) => {
   };
 
   const formatAmount = (value) => {
-    const formatted = value.replace(/\D/g, "");
-    setAmount(formatted.replace(/\B(?=(\d{3})+(?!\d))/g, ","));
+    // Allow empty input to clear the field
+    if (value === "") {
+      setAmount("");
+      return;
+    }
+
+    // Remove any non-digit characters except for the decimal point
+    const cleaned = value.replace(/[^0-9.]/g, "");
+
+    // Set the amount directly to allow normal editing
+    setAmount(cleaned);
   };
 
-  // Category options with icons
   const categories = [
     { name: "Food", icon: "food" },
     { name: "Transportation", icon: "car" },
@@ -106,6 +142,7 @@ const AddExpenseScreen = ({ navigation }) => {
             category ? styles.categorySelected : null,
           ]}
           onPress={() => setShowCategoryModal(true)}
+          disabled={loading}
         >
           <Text style={styles.categoryButtonText}>
             {category ? `${category} Selected` : "Select Category"}
@@ -138,6 +175,13 @@ const AddExpenseScreen = ({ navigation }) => {
                     color="black"
                   />
                   <Text style={styles.categoryText}>{item.name}</Text>
+                  {category === item.name && (
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={20}
+                      color="green"
+                    />
+                  )}
                 </TouchableOpacity>
               ))}
               <Button mode="text" onPress={() => setShowCategoryModal(false)}>
@@ -151,8 +195,13 @@ const AddExpenseScreen = ({ navigation }) => {
           mode="outlined"
           onPress={() => setShowDatePicker(true)}
           style={styles.input}
+          disabled={loading}
         >
-          {date.toLocaleDateString()}
+          {new Intl.DateTimeFormat("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }).format(date)}
         </Button>
         {showDatePicker && (
           <DateTimePicker
@@ -170,6 +219,7 @@ const AddExpenseScreen = ({ navigation }) => {
           style={styles.input}
           multiline
           numberOfLines={3}
+          disabled={loading}
         />
 
         <Button
@@ -184,6 +234,14 @@ const AddExpenseScreen = ({ navigation }) => {
             "Save Expense"
           )}
         </Button>
+
+        <Snackbar
+          visible={snackbarVisible}
+          onDismiss={() => setSnackbarVisible(false)}
+          duration={3000}
+        >
+          Expense added successfully!
+        </Snackbar>
       </View>
     </Provider>
   );
@@ -251,9 +309,6 @@ const styles = StyleSheet.create({
   button: {
     marginTop: 20,
     backgroundColor: COLORS.primary,
-  },
-  loadingIndicator: {
-    marginTop: 20,
   },
 });
 

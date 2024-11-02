@@ -1,4 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useLayoutEffect,
+} from "react";
 import {
   View,
   StyleSheet,
@@ -10,7 +15,8 @@ import { Text, Card, Button } from "react-native-paper";
 import { LineChart } from "react-native-chart-kit";
 import { COLORS, SIZES } from "../styles/theme";
 import { db } from "../firebaseConfig";
-import { collection, query, onSnapshot } from "firebase/firestore";
+import { collection, query, onSnapshot, where } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -26,76 +32,216 @@ const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const auth = getAuth();
+
+  // Logout function
+
+  // Configure the header with a hamburger icon
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <MaterialCommunityIcons
+          name="menu"
+          size={28}
+          color={COLORS.primary}
+          style={{ marginLeft: 15 }}
+          onPress={() => navigation.openDrawer()}
+        />
+      ),
+    });
+  }, [navigation]);
+
+  // useEffect(() => {
+  //   const fetchExpenses = () => {
+  //     setLoading(true);
+  //     setError(null);
+
+  //     try {
+  //       const userId = auth.currentUser ? auth.currentUser.uid : null;
+
+  //       if (!userId) {
+  //         setError("User not authenticated.");
+  //         setLoading(false);
+  //         return;
+  //       }
+
+  //       const expensesRef = collection(db, "expenses");
+  //       const q = query(expensesRef, where("userId", "==", userId));
+
+  //       onSnapshot(q, (querySnapshot) => {
+  //         const expensesArray = [];
+  //         let total = 0;
+  //         const categoryMap = {};
+  //         const monthlyMap = {};
+
+  //         querySnapshot.forEach((doc) => {
+  //           const expense = doc.data();
+  //           expensesArray.push({ id: doc.id, ...expense });
+
+  //           // Parse date and calculate monthly totals
+  //           if (expense.date) {
+  //             const [month, day, year] = expense.date.split("/").map(Number);
+  //             const expenseDate = new Date(year, month - 1, day);
+  //             const currentDate = new Date();
+
+  //             // Calculate current month's expenses
+  //             if (
+  //               expenseDate.getMonth() === currentDate.getMonth() &&
+  //               expenseDate.getFullYear() === currentDate.getFullYear()
+  //             ) {
+  //               const amount = expense.amount || 0;
+  //               if (amount < 1000000) {
+  //                 total += amount;
+
+  //                 const category = expense.category || "Uncategorized";
+  //                 categoryMap[category] = (categoryMap[category] || 0) + amount;
+  //               }
+  //             }
+
+  //             // Monthly trend data
+  //             const monthKey = `${
+  //               expenseDate.getMonth() + 1
+  //             }/${expenseDate.getFullYear()}`;
+  //             monthlyMap[monthKey] =
+  //               (monthlyMap[monthKey] || 0) + (expense.amount || 0);
+  //           }
+  //         });
+
+  //         // Calculate monthly comparisons and set states
+  //         const monthlyComparisonsArray = Object.keys(monthlyMap)
+  //           .map((monthKey) => ({
+  //             month: monthKey,
+  //             total: monthlyMap[monthKey],
+  //           }))
+  //           .sort((a, b) => new Date(a.month) - new Date(b.month));
+
+  //         if (monthlyComparisonsArray.length > 1) {
+  //           const lastMonthTotal =
+  //             monthlyComparisonsArray[monthlyComparisonsArray.length - 2].total;
+  //           setPreviousMonthTotal(lastMonthTotal);
+  //           setComparisonArrow(
+  //             total > lastMonthTotal ? "arrow-up-thin" : "arrow-down-thin"
+  //           );
+  //         } else {
+  //           setPreviousMonthTotal(null);
+  //           setComparisonArrow(null);
+  //         }
+
+  //         setExpenses(expensesArray);
+  //         setMonthlyTotal(total);
+  //         setCategoryTotals(categoryMap);
+  //         setMonthlyComparisons(monthlyComparisonsArray);
+  //         setLoading(false);
+  //       });
+  //     } catch (err) {
+  //       setError("Failed to load data. Please try again later.");
+  //       setLoading(false);
+  //     }
+  //   };
+
+  //   fetchExpenses();
+  // }, [auth.currentUser]);
   useEffect(() => {
     const fetchExpenses = () => {
       setLoading(true);
       setError(null);
 
       try {
+        const userId = auth.currentUser ? auth.currentUser.uid : null;
+
+        if (!userId) {
+          setError("User not authenticated.");
+          setLoading(false);
+          return;
+        }
+
         const expensesRef = collection(db, "expenses");
-        const q = query(expensesRef);
+        const q = query(expensesRef, where("userId", "==", userId));
 
         onSnapshot(q, (querySnapshot) => {
-          let expensesArray = [];
-          let total = 0;
-          let categoryMap = {};
-          let monthlyMap = {};
+          const expensesArray = [];
+          let totalCurrentMonth = 0;
+          let totalPreviousMonth = 0;
+          const categoryMap = {};
+          const monthlyMap = {};
+
+          // Get current and previous month boundaries
+          const currentDate = new Date();
+          const currentMonthStart = new Date(
+            currentDate.getFullYear(),
+            currentDate.getMonth(),
+            1
+          );
+          const previousMonthStart = new Date(
+            currentDate.getFullYear(),
+            currentDate.getMonth() - 1,
+            1
+          );
+          const previousMonthEnd = new Date(
+            currentDate.getFullYear(),
+            currentDate.getMonth(),
+            0
+          );
 
           querySnapshot.forEach((doc) => {
             const expense = doc.data();
             expensesArray.push({ id: doc.id, ...expense });
 
+            // Parse the expense date
             if (expense.date) {
               const [month, day, year] = expense.date.split("/").map(Number);
               const expenseDate = new Date(year, month - 1, day);
-              const currentDate = new Date();
 
+              // Calculate current month's expenses
               if (
-                expenseDate.getMonth() === currentDate.getMonth() &&
-                expenseDate.getFullYear() === currentDate.getFullYear()
+                expenseDate >= currentMonthStart &&
+                expenseDate <= currentDate
               ) {
-                const amount = expense.amount;
-                if (amount && amount < 1000000) {
-                  total += amount;
+                const amount = expense.amount || 0;
+                if (amount < 1000000) {
+                  totalCurrentMonth += amount;
 
                   const category = expense.category || "Uncategorized";
                   categoryMap[category] = (categoryMap[category] || 0) + amount;
                 }
               }
 
+              // Calculate previous month's expenses
+              if (
+                expenseDate >= previousMonthStart &&
+                expenseDate <= previousMonthEnd
+              ) {
+                totalPreviousMonth += expense.amount || 0;
+              }
+
+              // Monthly trend data
               const monthKey = `${
                 expenseDate.getMonth() + 1
               }/${expenseDate.getFullYear()}`;
               monthlyMap[monthKey] =
-                (monthlyMap[monthKey] || 0) + expense.amount;
+                (monthlyMap[monthKey] || 0) + (expense.amount || 0);
             }
           });
 
+          // Calculate monthly comparisons and set states
           const monthlyComparisonsArray = Object.keys(monthlyMap)
             .map((monthKey) => ({
               month: monthKey,
               total: monthlyMap[monthKey],
             }))
-            .sort((a, b) => {
-              const [monthA, yearA] = a.month.split("/").map(Number);
-              const [monthB, yearB] = b.month.split("/").map(Number);
-              return new Date(yearA, monthA - 1) - new Date(yearB, monthB - 1);
-            });
+            .sort((a, b) => new Date(a.month) - new Date(b.month));
 
-          if (monthlyComparisonsArray.length > 1) {
-            const lastMonthTotal =
-              monthlyComparisonsArray[monthlyComparisonsArray.length - 2].total;
-            setPreviousMonthTotal(lastMonthTotal);
-            setComparisonArrow(
-              total > lastMonthTotal ? "arrow-up-thin" : "arrow-down-thin"
-            );
-          } else {
-            setPreviousMonthTotal(null);
-            setComparisonArrow(null);
-          }
+          setPreviousMonthTotal(
+            totalPreviousMonth > 0 ? totalPreviousMonth : null
+          );
+          setComparisonArrow(
+            totalCurrentMonth > totalPreviousMonth
+              ? "arrow-up-thin"
+              : "arrow-down-thin"
+          );
 
           setExpenses(expensesArray);
-          setMonthlyTotal(total);
+          setMonthlyTotal(totalCurrentMonth);
           setCategoryTotals(categoryMap);
           setMonthlyComparisons(monthlyComparisonsArray);
           setLoading(false);
@@ -107,7 +253,7 @@ const HomeScreen = ({ navigation }) => {
     };
 
     fetchExpenses();
-  }, []);
+  }, [auth.currentUser]);
 
   const topCategories = Object.keys(categoryTotals)
     .sort((a, b) => categoryTotals[b] - categoryTotals[a])
@@ -148,7 +294,7 @@ const HomeScreen = ({ navigation }) => {
           <View style={styles.container}>
             <Text style={styles.title}>Spendo Dashboard</Text>
 
-            <Card style={styles.card}>
+            {/* <Card style={styles.card}>
               <Card.Content>
                 <Text style={styles.cardTitle}>Total Monthly Expenses</Text>
                 <View style={styles.totalExpenseRow}>
@@ -164,6 +310,36 @@ const HomeScreen = ({ navigation }) => {
                       }
                       style={styles.arrowIcon}
                     />
+                  )}
+                </View>
+                {previousMonthTotal !== null && (
+                  <Text style={styles.comparisonText}>
+                    Last month: ₹{(previousMonthTotal || 0).toFixed(2)}
+                  </Text>
+                )}
+              </Card.Content>
+            </Card> */}
+
+            <Card style={styles.card}>
+              <Card.Content>
+                <Text style={styles.cardTitle}>Total Monthly Expenses</Text>
+                <View style={styles.totalExpenseRow}>
+                  <Text style={styles.cardAmount}>
+                    ₹{(monthlyTotal || 0).toFixed(2)}
+                  </Text>
+                  {comparisonArrow && previousMonthTotal !== null ? (
+                    <MaterialCommunityIcons
+                      name={comparisonArrow}
+                      size={20}
+                      color={
+                        comparisonArrow === "arrow-up-thin" ? "green" : "red"
+                      }
+                      style={styles.arrowIcon}
+                    />
+                  ) : (
+                    <Text style={styles.noDataText}>
+                      No data for last month
+                    </Text>
                   )}
                 </View>
                 {previousMonthTotal !== null && (
@@ -193,11 +369,11 @@ const HomeScreen = ({ navigation }) => {
                       labelColor: (opacity = 1) =>
                         `rgba(255, 255, 255, ${opacity})`,
                     }}
-                    bezier // Makes the line smoother
+                    bezier
                     style={styles.chart}
                   />
                 ) : (
-                  <Text style={styles.noDataText}>
+                  <Text style={styles.noDataChartText}>
                     No data available for the chart
                   </Text>
                 )}
@@ -311,6 +487,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 16,
   },
+  logoutButton: {
+    marginHorizontal: 16,
+    marginVertical: 10,
+    backgroundColor: COLORS.error || "red",
+    alignSelf: "flex-end",
+  },
   card: {
     width: "100%",
     marginVertical: 10,
@@ -375,6 +557,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.placeholder,
     textAlign: "center",
+    marginVertical: 20,
+    marginLeft: 15,
+  },
+  noDataChartText: {
+    fontSize: 16,
+    color: COLORS.placeholder,
+    textAlign: "left",
     marginVertical: 20,
   },
 });

@@ -1,10 +1,10 @@
 // styles/theme.js
 export const COLORS = {
-  primary: "#4CAF50", // A nice green for buttons
-  secondary: "#009688", // Complementary color for accents
-  background: "#f5f5f5", // Light background color
-  text: "#333333", // Dark text color
-  placeholder: "#888888", // Placeholder text color
+  primary: "#4CAF50",
+  secondary: "#009688",
+  background: "#f5f5f5",
+  text: "#333333",
+  placeholder: "#888888",
 };
 
 export const SIZES = {
